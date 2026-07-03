@@ -23,7 +23,10 @@ export default function GraficaHoras({ datos }: Props) {
           <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
           <XAxis dataKey="hora_label" tick={{ fontSize: 11 }} />
           <YAxis tick={{ fontSize: 11 }} />
-          <Tooltip labelFormatter={(l) => `Hora: ${l}`} formatter={(v: number) => [v, "Turnos"]} />
+          <Tooltip
+            labelFormatter={(l) => `Hora: ${l}`}
+            formatter={(v) => [Number(v ?? 0), "Turnos"]}
+          />
           <Bar dataKey="total" name="Turnos" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
