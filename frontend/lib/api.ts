@@ -134,11 +134,22 @@ export interface ValidacionTienda {
   hasta: string;
 }
 
+export interface RangoFechas {
+  fecha_inicio: string;
+  fecha_fin: string;
+  fecha_min: string;
+  fecha_max: string;
+  max_turnos: string | null;
+  max_ventas: string | null;
+}
+
 export const efectividadApi = {
   obtener: (params?: Record<string, string>) =>
     api.get<FilaEfectividad[]>("/stats/efectividad", { params }).then((r) => r.data),
   validacion: (params?: Record<string, string>) =>
     api.get<ValidacionTienda[]>("/stats/validacion", { params }).then((r) => r.data),
+  rangoFechas: () =>
+    api.get<RangoFechas>("/stats/rango-fechas").then((r) => r.data),
 };
 
 export const cargasApi = {

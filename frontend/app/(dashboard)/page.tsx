@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { efectividadApi, type FilaEfectividad } from "@/lib/api";
+import { efectividadApi, type FilaEfectividad, type RangoFechas } from "@/lib/api";
 import EfectividadTable from "@/components/efectividad/EfectividadTable";
 
 function StatCard({
@@ -27,8 +27,10 @@ function StatCard({
 
 export default function Dashboard() {
   const [filtros, setFiltros] = useState({ fechaInicio: "", fechaFin: "" });
+  const [rango, setRango] = useState<RangoFechas | null>(null);
   const [datos, setDatos] = useState<FilaEfectividad[]>([]);
   const [cargando, setCargando] = useState(true);
+  const [rangoListo, setRangoListo] = useState(false);
 
   const cargarDatos = useCallback(async () => {
     setCargando(true);
@@ -45,8 +47,26 @@ export default function Dashboard() {
   }, [filtros]);
 
   useEffect(() => {
-    cargarDatos();
-  }, [cargarDatos]);
+    efectividadApi
+      .rangoFechas()
+      .then((r) => {
+        setRango(r);
+        setFiltros({ fechaInicio: r.fecha_inicio, fechaFin: r.fecha_fin });
+      })
+      .catch(() => {
+        const hoy = new Date();
+        const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1)
+          .toISOString()
+          .slice(0, 10);
+        const hoyTexto = hoy.toISOString().slice(0, 10);
+        setFiltros({ fechaInicio: inicioMes, fechaFin: hoyTexto });
+      })
+      .finally(() => setRangoListo(true));
+  }, []);
+
+  useEffect(() => {
+    if (rangoListo) cargarDatos();
+  }, [cargarDatos, rangoListo]);
 
   const resumen = useMemo(() => {
     const atenciones = datos.reduce(
@@ -104,6 +124,8 @@ export default function Dashboard() {
               type="date"
               value={filtros.fechaInicio}
               onChange={(e) => setFiltros((p) => ({ ...p, fechaInicio: e.target.value }))}
+              min={rango?.fecha_min}
+              max={rango?.fecha_max}
               className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-sky-500"
             />
           </div>
@@ -113,13 +135,27 @@ export default function Dashboard() {
               type="date"
               value={filtros.fechaFin}
               onChange={(e) => setFiltros((p) => ({ ...p, fechaFin: e.target.value }))}
+              min={filtros.fechaInicio || rango?.fecha_min}
+              max={rango?.fecha_max}
               className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-sky-500"
             />
           </div>
         </div>
+        {rango && (
+          <p className="text-xs text-slate-500 sm:order-last sm:w-full">
+            Mes actual disponible: {rango.fecha_inicio} al {rango.fecha_max}
+            {rango.max_turnos && ` · Tickets hasta ${rango.max_turnos}`}
+            {rango.max_ventas && ` · Ventas hasta ${rango.max_ventas}`}
+          </p>
+        )}
         <div className="flex gap-2 sm:gap-3">
           <button
-            onClick={() => setFiltros({ fechaInicio: "", fechaFin: "" })}
+            onClick={() =>
+              setFiltros({
+                fechaInicio: rango?.fecha_inicio ?? "",
+                fechaFin: rango?.fecha_fin ?? "",
+              })
+            }
             className="flex-1 sm:flex-none px-4 py-2 text-sm text-slate-400 border border-slate-700 rounded-lg hover:bg-slate-800 transition"
           >
             Limpiar

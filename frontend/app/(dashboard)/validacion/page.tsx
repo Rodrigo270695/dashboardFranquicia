@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useState, useCallback } from "react";
-import { efectividadApi, type ValidacionTienda } from "@/lib/api";
+import { efectividadApi, type RangoFechas, type ValidacionTienda } from "@/lib/api";
 
 const CATEGORIAS: Record<string, string[]> = {
   Consulta: ["consulta", "consulta hogar"],
@@ -24,9 +24,11 @@ function agruparPorCategoria(botones: ValidacionTienda["botones"]) {
 
 export default function ValidacionPage() {
   const [filtros, setFiltros] = useState({ fechaInicio: "", fechaFin: "" });
+  const [rango, setRango] = useState<RangoFechas | null>(null);
   const [datos, setDatos] = useState<ValidacionTienda[]>([]);
   const [cargando, setCargando] = useState(true);
   const [expandida, setExpandida] = useState<string | null>(null);
+  const [rangoListo, setRangoListo] = useState(false);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -38,7 +40,27 @@ export default function ValidacionPage() {
     finally { setCargando(false); }
   }, [filtros]);
 
-  useEffect(() => { cargar(); }, [cargar]);
+  useEffect(() => {
+    efectividadApi
+      .rangoFechas()
+      .then((r) => {
+        setRango(r);
+        setFiltros({ fechaInicio: r.fecha_inicio, fechaFin: r.fecha_fin });
+      })
+      .catch(() => {
+        const hoy = new Date();
+        const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1)
+          .toISOString()
+          .slice(0, 10);
+        const hoyTexto = hoy.toISOString().slice(0, 10);
+        setFiltros({ fechaInicio: inicioMes, fechaFin: hoyTexto });
+      })
+      .finally(() => setRangoListo(true));
+  }, []);
+
+  useEffect(() => {
+    if (rangoListo) cargar();
+  }, [cargar, rangoListo]);
 
   const totalGeneral = datos.reduce((a, t) => a + t.total_tickets, 0);
 
@@ -52,16 +74,21 @@ export default function ValidacionPage() {
       <div className="bg-slate-900 border border-slate-800 rounded-xl px-5 py-4 flex flex-wrap gap-4 items-end">
         <div className="flex flex-col gap-1">
           <label className="text-xs text-slate-400">Desde</label>
-          <input type="date" value={filtros.fechaInicio} onChange={(e) => setFiltros((p) => ({ ...p, fechaInicio: e.target.value }))}
+          <input type="date" value={filtros.fechaInicio} min={rango?.fecha_min} max={rango?.fecha_max} onChange={(e) => setFiltros((p) => ({ ...p, fechaInicio: e.target.value }))}
             className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-sky-500" />
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-xs text-slate-400">Hasta</label>
-          <input type="date" value={filtros.fechaFin} onChange={(e) => setFiltros((p) => ({ ...p, fechaFin: e.target.value }))}
+          <input type="date" value={filtros.fechaFin} min={filtros.fechaInicio || rango?.fecha_min} max={rango?.fecha_max} onChange={(e) => setFiltros((p) => ({ ...p, fechaFin: e.target.value }))}
             className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-sky-500" />
         </div>
-        <button onClick={() => setFiltros({ fechaInicio: "", fechaFin: "" })} className="px-4 py-2 text-sm text-slate-400 border border-slate-700 rounded-lg hover:bg-slate-800">Limpiar</button>
+        <button onClick={() => setFiltros({ fechaInicio: rango?.fecha_inicio ?? "", fechaFin: rango?.fecha_fin ?? "" })} className="px-4 py-2 text-sm text-slate-400 border border-slate-700 rounded-lg hover:bg-slate-800">Limpiar</button>
         <button onClick={cargar} className="px-5 py-2 text-sm bg-sky-600 text-white rounded-lg hover:bg-sky-500 font-medium">Aplicar</button>
+        {rango && (
+          <p className="w-full text-xs text-slate-500">
+            Mes actual disponible: {rango.fecha_inicio} al {rango.fecha_max}
+          </p>
+        )}
         {!cargando && (
           <div className="ml-auto text-sm text-slate-400">
             <strong className="text-white">{datos.length}</strong> tiendas ·{" "}

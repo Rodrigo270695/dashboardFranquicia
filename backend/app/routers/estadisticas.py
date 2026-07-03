@@ -1,5 +1,6 @@
 from datetime import date
 from fastapi import APIRouter, Depends, Query
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.schemas.estadisticas import ResumenKPI, PuntoTendencia, ItemDimension, PuntoHora
@@ -7,6 +8,51 @@ from app.services import stats_service
 from app.services import efectividad_service
 
 router = APIRouter()
+
+
+@router.get("/rango-fechas")
+def rango_fechas(db: Session = Depends(get_db)):
+    """
+    Rango sugerido para los filtros:
+    - Siempre inicia el primer día del mes actual.
+    - Termina en la última fecha del mes actual con data cargada.
+    - Si tickets y ventas tienen data, usa la menor fecha máxima para comparar
+      periodos completos.
+    """
+    hoy = date.today()
+    inicio_mes = hoy.replace(day=1)
+    params = {"inicio_mes": inicio_mes, "hoy": hoy}
+
+    max_turnos = db.execute(
+        text("""
+            SELECT MAX(fecha)
+            FROM turnos
+            WHERE fecha >= :inicio_mes AND fecha <= :hoy
+        """),
+        params,
+    ).scalar()
+    max_ventas = db.execute(
+        text("""
+            SELECT MAX(fecha)
+            FROM ventas
+            WHERE fecha >= :inicio_mes AND fecha <= :hoy
+        """),
+        params,
+    ).scalar()
+
+    fechas_disponibles = [f for f in (max_turnos, max_ventas) if f is not None]
+    fin = min(fechas_disponibles) if len(fechas_disponibles) == 2 else (
+        fechas_disponibles[0] if fechas_disponibles else hoy
+    )
+
+    return {
+        "fecha_inicio": inicio_mes.isoformat(),
+        "fecha_fin": fin.isoformat(),
+        "fecha_min": inicio_mes.isoformat(),
+        "fecha_max": fin.isoformat(),
+        "max_turnos": max_turnos.isoformat() if max_turnos else None,
+        "max_ventas": max_ventas.isoformat() if max_ventas else None,
+    }
 
 
 @router.get("/resumen", response_model=ResumenKPI)
