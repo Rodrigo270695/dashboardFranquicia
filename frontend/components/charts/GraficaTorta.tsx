@@ -27,14 +27,14 @@ export default function GraficaTorta({ datos, titulo }: Props) {
             cx="50%"
             cy="50%"
             outerRadius={90}
-            label={({ nombre, percent }) => `${(percent * 100).toFixed(0)}%`}
+            label={({ percent }) => `${((percent ?? 0) * 100).toFixed(0)}%`}
             labelLine={false}
           >
             {top8.map((_, i) => (
               <Cell key={i} fill={COLORES[i % COLORES.length]} />
             ))}
           </Pie>
-          <Tooltip formatter={(v: number) => [v.toLocaleString(), "Turnos"]} />
+          <Tooltip formatter={(v) => [Number(v ?? 0).toLocaleString(), "Turnos"]} />
           <Legend iconType="circle" iconSize={10} />
         </PieChart>
       </ResponsiveContainer>
