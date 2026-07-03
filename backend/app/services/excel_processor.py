@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import unicodedata
 from datetime import date, time
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert
@@ -39,6 +40,14 @@ MAPA_COLUMNAS = {
     "Turno derivado": "turno_derivado",
     "CANTIDAD": "cantidad",
 }
+
+
+def _normalizar_columna(valor: str) -> str:
+    """Normaliza encabezados Excel: sin tildes, espacios dobles ni signos."""
+    texto = unicodedata.normalize("NFKD", str(valor))
+    texto = "".join(c for c in texto if not unicodedata.combining(c))
+    texto = texto.lower().strip()
+    return " ".join(texto.replace(".", " ").replace("_", " ").split())
 
 
 def _parsear_tiempo_a_segundos(valor) -> int | None:
@@ -135,12 +144,15 @@ def procesar_excel(ruta_archivo: str, nombre_archivo: str, db: Session) -> dict:
 
     df.columns = df.columns.str.strip()
 
+    mapa_normalizado = {
+        _normalizar_columna(col_excel): col_db
+        for col_excel, col_db in MAPA_COLUMNAS.items()
+    }
     columnas_normalizadas = {}
-    for col_excel, col_db in MAPA_COLUMNAS.items():
-        for col_real in df.columns:
-            if col_real.strip().lower() == col_excel.lower():
-                columnas_normalizadas[col_real] = col_db
-                break
+    for col_real in df.columns:
+        col_db = mapa_normalizado.get(_normalizar_columna(col_real))
+        if col_db:
+            columnas_normalizadas[col_real] = col_db
 
     df = df.rename(columns=columnas_normalizadas)
 
@@ -204,18 +216,19 @@ def procesar_excel(ruta_archivo: str, nombre_archivo: str, db: Session) -> dict:
 
     for registro in registros:
         registro["carga_id"] = carga.id
-        stmt = (
-            insert(Turno)
-            .values(**registro)
-            .on_conflict_do_nothing(
-                constraint="uq_turno_identificador"
-            )
+        stmt = insert(Turno).values(**registro)
+        columnas_actualizables = {
+            col: getattr(stmt.excluded, col)
+            for col in registro.keys()
+            if col not in {"oficina", "fecha", "ticket", "ini_espera", "carga_id"}
+        }
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_turno_identificador",
+            set_=columnas_actualizables,
         )
         result = db.execute(stmt)
         if result.rowcount > 0:
             nuevos += 1
-        else:
-            duplicados += 1
 
     carga.registros_nuevos = nuevos
     carga.registros_duplicados = duplicados
