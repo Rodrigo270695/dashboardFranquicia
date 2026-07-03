@@ -44,7 +44,13 @@ MAPA_COLUMNAS = {
 
 def _normalizar_columna(valor: str) -> str:
     """Normaliza encabezados Excel: sin tildes, espacios dobles ni signos."""
-    texto = unicodedata.normalize("NFKD", str(valor))
+    texto = str(valor)
+    # Algunos XLS exportados desde web llegan con mojibake: "NÃºmero".
+    try:
+        texto = texto.encode("latin1").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        pass
+    texto = unicodedata.normalize("NFKD", texto)
     texto = "".join(c for c in texto if not unicodedata.combining(c))
     texto = texto.lower().strip()
     for caracter in (".", "_", "\n", "\r", "\t", "-", "/"):
@@ -54,6 +60,7 @@ def _normalizar_columna(valor: str) -> str:
 
 def _resolver_columna_ticket(columna: str) -> str | None:
     normalizada = _normalizar_columna(columna)
+    compacta = "".join(c for c in normalizada if c.isalnum())
     if normalizada in {
         "numero de identificacion",
         "nro de identificacion",
@@ -61,6 +68,8 @@ def _resolver_columna_ticket(columna: str) -> str | None:
     }:
         return "numero_identificacion"
     if "numero" in normalizada and "identificacion" in normalizada:
+        return "numero_identificacion"
+    if "identific" in compacta and ("numero" in compacta or "nro" in compacta):
         return "numero_identificacion"
     return None
 
@@ -183,6 +192,11 @@ def procesar_excel(ruta_archivo: str, nombre_archivo: str, db: Session) -> dict:
         col_db = col_db or _resolver_columna_ticket(str(col_real))
         if col_db:
             columnas_normalizadas[col_real] = col_db
+
+    # Fallback por estructura fija del reporte: columna U = Número de identificación.
+    # Esto evita perder el DNI si el encabezado llega truncado o con encoding raro.
+    if "numero_identificacion" not in columnas_normalizadas.values() and len(df.columns) >= 21:
+        columnas_normalizadas[df.columns[20]] = "numero_identificacion"
 
     df = df.rename(columns=columnas_normalizadas)
 
