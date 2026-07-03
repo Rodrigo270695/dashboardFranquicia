@@ -2,7 +2,8 @@
 Efectividad Post-Atención
 
 Atenciones = tickets de esa categoría en la tienda (por botón)
-Q_post     = ventas en la tienda con estado y operación válidos en el mismo período
+Q_post     = ventas en la tienda con estado y operación válidos, cuyo DNI/RUC
+             exista como Número de identificación en tickets del mismo período
 Efectividad = Q_post / Atenciones × 100
 
 Cruce de tiendas: normalizando los nombres (UPPER TRIM sin espacios dobles).
@@ -54,12 +55,18 @@ def calcular_efectividad(
 
     params: dict = {}
     filtro = ""
+    filtro_ventas = ""
+    filtro_tickets_dni = ""
     if fecha_inicio:
         params["fi"] = fecha_inicio
         filtro += " AND fecha >= :fi"
+        filtro_ventas += " AND v.fecha >= :fi"
+        filtro_tickets_dni += " AND t.fecha >= :fi"
     if fecha_fin:
         params["ff"] = fecha_fin
         filtro += " AND fecha <= :ff"
+        filtro_ventas += " AND v.fecha <= :ff"
+        filtro_tickets_dni += " AND t.fecha <= :ff"
 
     # ── Atenciones por tienda y botón ──────────────────────────────────────
     sql_tickets = text(f"""
@@ -87,13 +94,22 @@ def calcular_efectividad(
         params[f"operacion_{i}"] = operacion.upper()
 
     sql_ventas = text(f"""
-        SELECT punto_de_venta, COUNT(*) AS total
-        FROM ventas
-        WHERE punto_de_venta IS NOT NULL
-          AND UPPER(TRIM(estado)) IN ({estados_placeholders})
-          AND UPPER(TRIM(operacion)) IN ({operaciones_placeholders})
-        {filtro}
-        GROUP BY punto_de_venta
+        SELECT v.punto_de_venta, COUNT(*) AS total
+        FROM ventas v
+        WHERE v.punto_de_venta IS NOT NULL
+          AND UPPER(TRIM(v.estado)) IN ({estados_placeholders})
+          AND UPPER(TRIM(v.operacion)) IN ({operaciones_placeholders})
+          {filtro_ventas}
+          AND regexp_replace(COALESCE(v.dni_ruc, ''), '\\D', '', 'g') <> ''
+          AND EXISTS (
+              SELECT 1
+              FROM turnos t
+              WHERE t.numero_identificacion IS NOT NULL
+                {filtro_tickets_dni}
+                AND regexp_replace(COALESCE(t.numero_identificacion, ''), '\\D', '', 'g')
+                    = regexp_replace(COALESCE(v.dni_ruc, ''), '\\D', '', 'g')
+          )
+        GROUP BY v.punto_de_venta
     """)
     ventas_rows = db.execute(sql_ventas, params).fetchall()
 
