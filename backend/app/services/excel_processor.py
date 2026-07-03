@@ -47,7 +47,22 @@ def _normalizar_columna(valor: str) -> str:
     texto = unicodedata.normalize("NFKD", str(valor))
     texto = "".join(c for c in texto if not unicodedata.combining(c))
     texto = texto.lower().strip()
-    return " ".join(texto.replace(".", " ").replace("_", " ").split())
+    for caracter in (".", "_", "\n", "\r", "\t", "-", "/"):
+        texto = texto.replace(caracter, " ")
+    return " ".join(texto.split())
+
+
+def _resolver_columna_ticket(columna: str) -> str | None:
+    normalizada = _normalizar_columna(columna)
+    if normalizada in {
+        "numero de identificacion",
+        "nro de identificacion",
+        "num de identificacion",
+    }:
+        return "numero_identificacion"
+    if "numero" in normalizada and "identificacion" in normalizada:
+        return "numero_identificacion"
+    return None
 
 
 def _parsear_tiempo_a_segundos(valor) -> int | None:
@@ -103,6 +118,10 @@ def _limpiar_texto(valor) -> str | None:
 def _limpiar_identificacion(valor) -> str | None:
     if pd.isna(valor):
         return None
+    if isinstance(valor, (int, np.integer)):
+        return str(int(valor))
+    if isinstance(valor, (float, np.floating)) and float(valor).is_integer():
+        return str(int(valor))
     texto = str(valor).strip().replace('"', "").replace("'", "")
     if texto.endswith(".0"):
         texto = texto[:-2]
@@ -161,6 +180,7 @@ def procesar_excel(ruta_archivo: str, nombre_archivo: str, db: Session) -> dict:
     columnas_normalizadas = {}
     for col_real in df.columns:
         col_db = mapa_normalizado.get(_normalizar_columna(col_real))
+        col_db = col_db or _resolver_columna_ticket(str(col_real))
         if col_db:
             columnas_normalizadas[col_real] = col_db
 
