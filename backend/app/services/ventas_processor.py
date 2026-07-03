@@ -157,6 +157,16 @@ def _limpiar(valor) -> str | None:
     return texto if texto and texto.lower() not in ("nan", "none", "") else None
 
 
+def _limpiar_identificacion(valor) -> str | None:
+    if valor is None or (isinstance(valor, float) and np.isnan(valor)):
+        return None
+    texto = str(valor).strip().replace('"', "").replace("'", "")
+    if texto.endswith(".0"):
+        texto = texto[:-2]
+    digitos = "".join(c for c in texto if c.isdigit())
+    return digitos or None
+
+
 def _parsear_fecha(valor) -> date | None:
     if valor is None or (isinstance(valor, float) and np.isnan(valor)):
         return None
@@ -212,6 +222,8 @@ def procesar_excel_ventas(ruta_archivo: str, nombre_archivo: str, db: Session) -
                 valor = fila[col_db]
                 if col_db == "fecha":
                     registro[col_db] = _parsear_fecha(valor)
+                elif col_db == "dni_ruc":
+                    registro[col_db] = _limpiar_identificacion(valor)
                 elif col_db in COLUMNAS_NUMERICAS:
                     registro[col_db] = _parsear_decimal(valor)
                 else:
@@ -221,16 +233,21 @@ def procesar_excel_ventas(ruta_archivo: str, nombre_archivo: str, db: Session) -
                 errores += 1
                 continue
 
+            stmt = insert(Venta).values(**registro)
+            columnas_actualizables = {
+                col: getattr(stmt.excluded, col)
+                for col in registro.keys()
+                if col not in {"id_venta", "carga_id"}
+            }
             stmt = (
-                insert(Venta)
-                .values(**registro)
-                .on_conflict_do_nothing(constraint="uq_venta_id")
+                stmt.on_conflict_do_update(
+                    constraint="uq_venta_id",
+                    set_=columnas_actualizables,
+                )
             )
             result = db.execute(stmt)
             if result.rowcount > 0:
                 nuevos += 1
-            else:
-                duplicados += 1
 
         except Exception:
             errores += 1

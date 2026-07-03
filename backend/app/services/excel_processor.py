@@ -100,6 +100,16 @@ def _limpiar_texto(valor) -> str | None:
     return texto if texto else None
 
 
+def _limpiar_identificacion(valor) -> str | None:
+    if pd.isna(valor):
+        return None
+    texto = str(valor).strip().replace('"', "").replace("'", "")
+    if texto.endswith(".0"):
+        texto = texto[:-2]
+    digitos = "".join(c for c in texto if c.isdigit())
+    return digitos or None
+
+
 def _parsear_booleano(valor) -> bool | None:
     if pd.isna(valor):
         return None
@@ -187,7 +197,7 @@ def procesar_excel(ruta_archivo: str, nombre_archivo: str, db: Session) -> dict:
                 "nombre_usuario": _limpiar_texto(fila.get("nombre_usuario")),
                 "codigo_modulo": _limpiar_texto(fila.get("codigo_modulo")),
                 "tipo_identificacion": _limpiar_texto(fila.get("tipo_identificacion")),
-                "numero_identificacion": _limpiar_texto(fila.get("numero_identificacion")),
+                "numero_identificacion": _limpiar_identificacion(fila.get("numero_identificacion")),
                 "turno_derivado": _parsear_booleano(fila.get("turno_derivado")),
                 "cantidad": int(fila["cantidad"]) if fila.get("cantidad") is not None else None,
             }

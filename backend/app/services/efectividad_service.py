@@ -40,6 +40,24 @@ OPERACIONES_QPOST = [
 ]
 
 
+def _sql_dni_limpio(campo: str) -> str:
+    """
+    Normaliza DNI/RUC en SQL:
+    - Quita espacios y comillas.
+    - Quita sufijo .0 cuando Excel lo convirtió a decimal.
+    - Deja solo dígitos.
+    """
+    return (
+        "regexp_replace("
+        "regexp_replace("
+        f"regexp_replace(COALESCE({campo}, ''), '[[:space:]\"'']', '', 'g'), "
+        "'\\.0+$', '', 'g'"
+        "), "
+        "'[^0-9]', '', 'g'"
+        ")"
+    )
+
+
 def _norm_tienda(name: str) -> str:
     """Clave canónica para comparar nombres de tienda."""
     if not name:
@@ -93,6 +111,9 @@ def calcular_efectividad(
     for i, operacion in enumerate(OPERACIONES_QPOST):
         params[f"operacion_{i}"] = operacion.upper()
 
+    dni_venta = _sql_dni_limpio("v.dni_ruc")
+    dni_ticket = _sql_dni_limpio("t.numero_identificacion")
+
     sql_ventas = text(f"""
         SELECT v.punto_de_venta, COUNT(*) AS total
         FROM ventas v
@@ -100,14 +121,13 @@ def calcular_efectividad(
           AND UPPER(TRIM(v.estado)) IN ({estados_placeholders})
           AND UPPER(TRIM(v.operacion)) IN ({operaciones_placeholders})
           {filtro_ventas}
-          AND regexp_replace(COALESCE(v.dni_ruc, ''), '\\D', '', 'g') <> ''
+          AND {dni_venta} <> ''
           AND EXISTS (
               SELECT 1
               FROM turnos t
               WHERE t.numero_identificacion IS NOT NULL
                 {filtro_tickets_dni}
-                AND regexp_replace(COALESCE(t.numero_identificacion, ''), '\\D', '', 'g')
-                    = regexp_replace(COALESCE(v.dni_ruc, ''), '\\D', '', 'g')
+                AND {dni_ticket} = {dni_venta}
           )
         GROUP BY v.punto_de_venta
     """)
