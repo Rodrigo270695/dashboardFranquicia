@@ -2,8 +2,7 @@
 Efectividad Post-Atención
 
 Atenciones = tickets de esa categoría en la tienda (por botón)
-Q_post     = ventas en la tienda con estado válido (ACTIVADO MOVISTAR, ENTREGADO ALMACEN,
-             VISADO CAJA, PREVENTA) en el mismo período
+Q_post     = ventas en la tienda con estado y operación válidos en el mismo período
 Efectividad = Q_post / Atenciones × 100
 
 Cruce de tiendas: normalizando los nombres (UPPER TRIM sin espacios dobles).
@@ -24,6 +23,19 @@ ESTADOS_QPOST = [
     "ENTREGADO ALMACEN",
     "VISADO CAJA",
     "PREVENTA",
+]
+
+# Operaciones válidas para Q_post
+OPERACIONES_QPOST = [
+    "Postpago Alta",
+    "Postpago Migracion M4",
+    "Postpago Migración M4",
+    "Postpago Portabilidad Migración M4 (Or. Postpago)",
+    "Postpago Portabilidad Migracion M4 (Or. Postpago)",
+    "Postpago Portabilidad Migración M4 (Or. Prepago)",
+    "Postpago Portabilidad Migracion M4 (Or. Prepago)",
+    "Postpago Portabilidad ( Origen Postpago )",
+    "Postpago Portabilidad ( Origen Prepago )",
 ]
 
 
@@ -64,16 +76,22 @@ def calcular_efectividad(
     for r in ticket_rows:
         aten_idx[_norm_tienda(r.oficina)][r.boton] += r.total
 
-    # ── Ventas por tienda (solo estados válidos para Q_post) ───────────────
+    # ── Ventas por tienda (solo estados y operaciones válidas para Q_post) ─
     estados_placeholders = ", ".join(f":estado_{i}" for i in range(len(ESTADOS_QPOST)))
     for i, estado in enumerate(ESTADOS_QPOST):
         params[f"estado_{i}"] = estado
+    operaciones_placeholders = ", ".join(
+        f":operacion_{i}" for i in range(len(OPERACIONES_QPOST))
+    )
+    for i, operacion in enumerate(OPERACIONES_QPOST):
+        params[f"operacion_{i}"] = operacion.upper()
 
     sql_ventas = text(f"""
         SELECT punto_de_venta, COUNT(*) AS total
         FROM ventas
         WHERE punto_de_venta IS NOT NULL
           AND UPPER(TRIM(estado)) IN ({estados_placeholders})
+          AND UPPER(TRIM(operacion)) IN ({operaciones_placeholders})
         {filtro}
         GROUP BY punto_de_venta
     """)
