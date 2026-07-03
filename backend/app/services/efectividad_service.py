@@ -2,7 +2,8 @@
 Efectividad Post-Atención
 
 Atenciones = tickets de esa categoría en la tienda (por botón)
-Q_post     = ventas en la tienda con estado y operación válidos en el mismo período
+Q_post     = ventas en la tienda con estado y operación válidos, cuyo DNI/RUC
+             existe en tickets como Número de identificación
 Efectividad = Q_post / Atenciones × 100
 
 Cruce de tiendas: normalizando los nombres (UPPER TRIM sin espacios dobles).
@@ -39,6 +40,19 @@ OPERACIONES_QPOST = [
 ]
 
 
+def _sql_dni_limpio(campo: str) -> str:
+    """Deja solo dígitos para comparar DNI/RUC entre ventas y tickets."""
+    return (
+        "regexp_replace("
+        "regexp_replace("
+        f"regexp_replace(COALESCE({campo}, ''), '[[:space:]\"'']', '', 'g'), "
+        "'\\.0+$', '', 'g'"
+        "), "
+        "'[^0-9]', '', 'g'"
+        ")"
+    )
+
+
 def _norm_tienda(name: str) -> str:
     """Clave canónica para comparar nombres de tienda."""
     if not name:
@@ -55,14 +69,17 @@ def calcular_efectividad(
     params: dict = {}
     filtro = ""
     filtro_ventas = ""
+    filtro_tickets_dni = ""
     if fecha_inicio:
         params["fi"] = fecha_inicio
         filtro += " AND fecha >= :fi"
         filtro_ventas += " AND v.fecha >= :fi"
+        filtro_tickets_dni += " AND t.fecha >= :fi"
     if fecha_fin:
         params["ff"] = fecha_fin
         filtro += " AND fecha <= :ff"
         filtro_ventas += " AND v.fecha <= :ff"
+        filtro_tickets_dni += " AND t.fecha <= :ff"
 
     # ── Atenciones por tienda y botón ──────────────────────────────────────
     sql_tickets = text(f"""
@@ -89,6 +106,9 @@ def calcular_efectividad(
     for i, operacion in enumerate(OPERACIONES_QPOST):
         params[f"operacion_{i}"] = operacion.upper()
 
+    dni_venta = _sql_dni_limpio("v.dni_ruc")
+    dni_ticket = _sql_dni_limpio("t.numero_identificacion")
+
     sql_ventas = text(f"""
         SELECT v.punto_de_venta, COUNT(*) AS total
         FROM ventas v
@@ -96,6 +116,14 @@ def calcular_efectividad(
           AND UPPER(TRIM(v.estado)) IN ({estados_placeholders})
           AND UPPER(TRIM(v.operacion)) IN ({operaciones_placeholders})
           {filtro_ventas}
+          AND {dni_venta} <> ''
+          AND EXISTS (
+              SELECT 1
+              FROM turnos t
+              WHERE t.numero_identificacion IS NOT NULL
+                {filtro_tickets_dni}
+                AND {dni_ticket} = {dni_venta}
+          )
         GROUP BY v.punto_de_venta
     """)
     ventas_rows = db.execute(sql_ventas, params).fetchall()
