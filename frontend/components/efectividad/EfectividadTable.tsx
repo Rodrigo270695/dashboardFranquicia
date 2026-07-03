@@ -73,7 +73,7 @@ export default function EfectividadTable({ datos, cargando }: Props) {
         <div>
           <h2 className="text-sm sm:text-base font-bold text-white">Efectividad Post-Atención</h2>
           <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 leading-relaxed">
-            Q_post = ventas con estado y operación válidos que tienen ticket por DNI/RUC
+            Q_post = ventas con estado y operación válidos
           </p>
         </div>
         <div className="flex flex-wrap gap-3 text-[10px] sm:text-xs text-slate-500">
