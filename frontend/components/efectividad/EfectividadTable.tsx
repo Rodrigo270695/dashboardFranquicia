@@ -28,13 +28,13 @@ function CeldaMetrica({ m, dark = false }: { m: MetricaCategoria; dark?: boolean
   return (
     <Fragment>
       <td className={`px-3 py-2.5 text-center text-sm ${bg} ${color}`}>
-        {m.efectividad > 0 ? `${m.efectividad}%` : "—"}
+        {`${m.efectividad}%`}
       </td>
       <td className={`px-3 py-2.5 text-center text-sm ${dark ? "text-slate-300" : "text-slate-300"}`}>
-        {m.atenciones > 0 ? m.atenciones.toLocaleString() : "—"}
+        {m.atenciones.toLocaleString()}
       </td>
       <td className={`px-3 py-2.5 text-center text-sm ${dark ? "text-slate-300" : "text-slate-400"}`}>
-        {m.q_post > 0 ? m.q_post.toLocaleString() : "—"}
+        {m.q_post.toLocaleString()}
       </td>
     </Fragment>
   );
